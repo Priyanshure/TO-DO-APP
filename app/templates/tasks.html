@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}My Tasks - TaskFlow{% endblock %}
+
+{% block content %}
+<div class="tasks-container">
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+        <div class="stat-card stat-total">
+            <div class="stat-icon"><i class="fas fa-tasks"></i></div>
+            <div class="stat-info">
+                <span class="stat-number" id="totalTasks">{{ tasks|length if tasks else 0 }}</span>
+                <span class="stat-label">Total Tasks</span>
+            </div>
+        </div>
+        <div class="stat-card stat-pending">
+            <div class="stat-icon"><i class="fas fa-clock"></i></div>
+            <div class="stat-info">
+                <span class="stat-number" id="pendingTasks">0</span>
+                <span class="stat-label">Pending</span>
+            </div>
+        </div>
+        <div class="stat-card stat-completed">
+            <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-info">
+                <span class="stat-number" id="completedTasks">0</span>
+                <span class="stat-label">Completed</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Task Section -->
+    <div class="add-task-section">
+        <form method="POST" action="{{ url_for('tasks.add_task') }}" class="add-task-form" id="addTaskForm">
+            <div class="add-task-input-group">
+                <input type="text" name="title" placeholder="What needs to be done?" required id="taskTitle">
+                <select name="priority" id="taskPriority">
+                    <option value="low">🟢 Low</option>
+                    <option value="medium" selected>🟡 Medium</option>
+                    <option value="high">🔴 High</option>
+                </select>
+                <input type="date" name="due_date" id="taskDueDate">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Add Task
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Filter Tabs -->
+    <div class="filter-tabs">
+        <button class="filter-btn active" data-filter="all">
+            <i class="fas fa-list"></i> All
+        </button>
+        <button class="filter-btn" data-filter="pending">
+            <i class="fas fa-clock"></i> Pending
+        </button>
+        <button class="filter-btn" data-filter="completed">
+            <i class="fas fa-check-circle"></i> Completed
+        </button>
+        <button class="filter-btn" data-filter="high">
+            <i class="fas fa-fire"></i> High Priority
+        </button>
+    </div>
+
+    <!-- Task List -->
+    <div class="task-list" id="taskList">
+        {% if tasks %}
+            {% for task in tasks %}
+            <div class="task-item {{ 'completed' if task.completed else '' }}" data-priority="{{ task.priority }}" data-completed="{{ task.completed }}">
+                <div class="task-checkbox">
+                    <input type="checkbox" class="task-check" data-task-id="{{ task.id }}" {{ 'checked' if task.completed }}>
+                    <label class="checkmark"></label>
+                </div>
+                <div class="task-content">
+                    <h3 class="task-title">{{ task.title }}</h3>
+                    <div class="task-meta">
+                        <span class="task-priority priority-{{ task.priority }}">
+                            <i class="fas fa-circle"></i> {{ task.priority|capitalize }}
+                        </span>
+                        {% if task.due_date %}
+                        <span class="task-due {{ 'overdue' if task.due_date < now }}">
+                            <i class="fas fa-calendar"></i> {{ task.due_date.strftime('%b %d, %Y') }}
+                        </span>
+                        {% endif %}
+                        <span class="task-date">
+                            <i class="fas fa-clock"></i> {{ task.created_at.strftime('%b %d, %Y') if task.created_at else '' }}
+                        </span>
+                    </div>
+                </div>
+                <div class="task-actions">
+                    <button class="btn-icon btn-edit" onclick="editTask({{ task.id }}, '{{ task.title }}')" title="Edit">
+                        <i class="fas fa-pen"></i>
+                    </button>
+                    <form method="POST" action="{{ url_for('tasks.delete_task', task_id=task.id) }}" style="display:inline;">
+                        <button type="submit" class="btn-icon btn-delete" title="Delete" onclick="return confirm('Delete this task?')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <i class="fas fa-clipboard-list"></i>
+                <h2>No tasks yet</h2>
+                <p>Add your first task above to get started!</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2><i class="fas fa-pen"></i> Edit Task</h2>
+            <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <form method="POST" action="" id="editForm" class="modal-form">
+            <div class="form-group">
+                <label for="editTitle">Task Title</label>
+                <input type="text" id="editTitle" name="title" required>
+            </div>
+            <div class="form-group">
+                <label for="editPriority">Priority</label>
+                <select id="editPriority" name="priority">
+                    <option value="low">🟢 Low</option>
+                    <option value="medium">🟡 Medium</option>
+                    <option value="high">🔴 High</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="editDueDate">Due Date</label>
+                <input type="date" id="editDueDate" name="due_date">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Filter functionality
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+
+            const filter = this.dataset.filter;
+            document.querySelectorAll('.task-item').forEach(item => {
+                const completed = item.dataset.completed === 'True';
+                const priority = item.dataset.priority;
+
+                if (filter === 'all') item.style.display = 'flex';
+                else if (filter === 'pending') item.style.display = completed ? 'none' : 'flex';
+                else if (filter === 'completed') item.style.display = completed ? 'flex' : 'none';
+                else if (filter === 'high') item.style.display = priority === 'high' ? 'flex' : 'none';
+            });
+        });
+    });
+
+    // Toggle task completion via AJAX
+    document.querySelectorAll('.task-check').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const taskId = this.dataset.taskId;
+            fetch(`/tasks/toggle/${taskId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            }).then(() => location.reload());
+        });
+    });
+
+    // Edit task
+    function editTask(id, title) {
+        const modal = document.getElementById('editModal');
+        document.getElementById('editTitle').value = title;
+        document.getElementById('editForm').action = `/tasks/edit/${id}`;
+        modal.classList.add('active');
+    }
+
+    function closeModal() {
+        document.getElementById('editModal').classList.remove('active');
+    }
+
+    // Close modal on overlay click
+    document.getElementById('editModal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+
+    // Update stats
+    function updateStats() {
+        const tasks = document.querySelectorAll('.task-item');
+        let total = tasks.length, completed = 0;
+        tasks.forEach(t => { if (t.dataset.completed === 'True') completed++; });
+        document.getElementById('totalTasks').textContent = total;
+        document.getElementById('completedTasks').textContent = completed;
+        document.getElementById('pendingTasks').textContent = total - completed;
+    }
+    updateStats();
+</script>
+{% endblock %}
