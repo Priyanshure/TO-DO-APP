@@ -2,7 +2,6 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_bcrypt import Bcrypt
-from datetime import datetime
 import os
 
 db = SQLAlchemy()
@@ -14,13 +13,16 @@ def create_app():
     
     # Configuration
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
-        'DATABASE_URL', 
-        'sqlite:///' + os.path.join(app.instance_path, 'todo.db')
-    )
+    
+    # Handle Render's DATABASE_URL (and fix the postgres:// to postgresql:// issue)
+    database_url = os.environ.get('DATABASE_URL')
+    if database_url and database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+        
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(app.instance_path, 'todo.db')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
-    # Ensure instance folder exists
+    # Ensure instance folder exists (for local SQLite fallback)
     try:
         os.makedirs(app.instance_path)
     except OSError:
